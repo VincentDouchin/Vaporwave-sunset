@@ -17,8 +17,8 @@ const scene = new THREE.Scene();
 const camera0 = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.01, 2);
 const camera1 = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.01, 20);
 
-camera0.position.set(0, 0.06, 1.1)
-camera1.position.set(0, 0.06, 1.1)
+camera0.position.set(0, 0.06, 1)
+camera1.position.set(0, 0.06, 1)
 
 camera0.layers.set(0)
 camera1.layers.set(1)
@@ -29,7 +29,7 @@ document.body.appendChild(canvas)
 
 //!RENDERER
 const renderer = new THREE.WebGLRenderer({
-	canvas: canvas,
+	canvas: canvas
 });
 renderer.setClearColor(0x000000, 0)
 
@@ -93,82 +93,86 @@ sun.position.z = -4
 sun.position.y = 0.5
 sun.layers.set(1)
 scene.add(sun);
+const planeShader = new THREE.ShaderMaterial({
+	uniforms: {
+		pos: { value: 0.0 },
+		time: { value: 0 },
+		cells: { value: 24 },
+		offset: { value: 0.0 },
+		mountainRange: { value: 7 },
+		colorRoad: { value: new THREE.Vector4(113 / 255, 28 / 255, 146 / 255, 1) },
+		colorMountain: { value: new THREE.Vector4(234 / 255, 0 / 255, 217 / 255, 1) },
 
+
+	},
+
+	vertexShader: /* glsl */`
+	${cnoise}
+	varying vec4 vPosition;
+	varying vec3 vNormal;
+	varying vec2 vUv;
+	varying vec4 vColor;
+	uniform float cells;
+	uniform float pos;
+	uniform float offset;
+	uniform float mountainRange;
+	uniform vec4 colorRoad;
+	uniform vec4 colorMountain;
+
+	void main() 
+	{
+		vNormal = normal;
+		vUv = uv;
+		vec3 offsetPosition = vec3(uv.x,uv.y+offset,1.);
+		float noisedPosition = pow(abs(cnoise(offsetPosition * (cells-1.))*0.7),2.);
+		bool road = uv.x > mountainRange/cells && uv.x < (cells-mountainRange)/cells;
+		float mountain = road ?  0.:noisedPosition ;
+		float vPosY = ((pos+2.)/2.)-uv.y/2.;
+		// float vPosY = 0.1;
+		vPosition =  projectionMatrix * modelViewMatrix * vec4( position.x,position.y, mountain*vPosY , 1.0 );
+		vColor = road?colorRoad : colorMountain;
+		
+		gl_Position = vPosition ;
+
+	}`,
+	fragmentShader: /* glsl */`
+	varying vec2 vUv;
+	varying vec4 vPosition;
+	varying vec4 vColor;
+	uniform float cells;
+	uniform float time;
+	uniform float pos;
+	float grid(vec2 st, float res)
+	{
+	  vec2 grid = fract(st*res);
+	  return (step(res,grid.x) * step(res,grid.y));
+	}
+
+	void main()
+	{
+		float scale = cells * cells;
+		float resolution = 1./cells;
+		  vec2 grid_uv = vUv.xy * scale ; // scale
+		  
+		  float isGrid = 1.-grid(grid_uv+0.5, resolution) ; // resolution
+		  gl_FragColor = vec4(vec4(isGrid*vColor).xyz,1.);
+	}`,
+
+})
+const [planeWidth, planeLength] = [1, 2]
 const plane = new THREE.Mesh(
-	new THREE.PlaneGeometry(1, 2, 24, 24),
-	new THREE.ShaderMaterial({
-		uniforms: {
-			pos: { value: 0.0 },
-			time: { value: 0 },
-			cells: { value: 24 },
-			mountainRange: { value: 7 },
-			colorRoad: { value: new THREE.Vector4(113 / 255, 28 / 255, 146 / 255, 1) },
-			colorMountain: { value: new THREE.Vector4(234 / 255, 0 / 255, 217 / 255, 1) },
-			// colorRoad:{value:new THREE.Vector4(19/255,62/255,124/255,1)},
-			// colorMountain:{value:new THREE.Vector4(10/255,189/255,198/255,1)}
-			
-		},
-	
-		vertexShader: /* glsl */`
-		${cnoise}
-		varying vec4 vPosition;
-		varying vec3 vNormal;
-		varying vec2 vUv;
-		uniform float cells;
-		uniform float mountainRange;
-		uniform vec4 colorRoad;
-		uniform vec4 colorMountain;
-		varying vec4 vColor;
-		// #include <begin_vertex>
-        // #include <project_vertex>
-        // #include <fog_vertex>
+	new THREE.PlaneGeometry(planeWidth, planeLength, 24, 24),
+	planeShader
 
-		void main() 
-		{
-			vNormal = normal;
-			vUv = uv;
-			float noisedPosition = pow(abs(cnoise(position * 23.)*0.7),2.);
-			bool road = uv.x > mountainRange/cells && uv.x < (cells-mountainRange)/cells;
-			float mountain = road ?  0.:noisedPosition  ;
-			vPosition =  projectionMatrix * modelViewMatrix * vec4( position.x,position.y, mountain , 1.0 );
-			vColor = road?colorRoad : colorMountain;
-			
-			gl_Position = vPosition ;
-
-		}`,
-		fragmentShader: /* glsl */`
-		varying vec2 vUv;
-		varying vec4 vPosition;
-		varying vec4 vColor;
-		uniform float cells;
-		uniform float time;
-		uniform float pos;
-		// #include <fog_pars_fragment>
-		float grid(vec2 st, float res)
-		{
-		  vec2 grid = fract(st*res)*2.;
-		  return (smoothstep(res,res,grid.x) * smoothstep(res,res,grid.y));
-		}
-
-		void main()
-		{
-			float scale = cells * cells;
-			float resolution = 1./cells;
-		  	vec2 grid_uv = vUv.xy * scale +1.; // scale
-			//   grid_uv.y += time*cells;
-			  
-		  	float isGrid = 1.-grid(grid_uv, resolution) ; // resolution
-		  	gl_FragColor = vec4(vec4(isGrid*vColor).xyz,1.);
-			// #include <fog_fragment>
-		}`,
-
-	})
 );
 plane.rotation.x = -Math.PI * 0.5;
-
 plane.layers.set(0)
 scene.add(plane);
 const plane2 = plane.clone()
+const plane2Shader = planeShader.clone()
+plane2Shader.uniforms.offset.value = 1
+plane2.position.z = -2
+plane2.material = plane2Shader
 scene.add(plane2)
 
 //!PASSES
@@ -227,13 +231,20 @@ finalComposer.addPass(finalPass);
 
 //!ANIMATE
 const clock = new THREE.Clock()
+const planeSpeed = 0.005
 const animate = function () {
 
 	sun.material.uniforms.time.value = clock.getElapsedTime()
 	requestAnimationFrame(animate);
-	plane.position.z = ((clock.getElapsedTime() * 0.15) % 2)
 
-	plane2.position.z = ((clock.getElapsedTime() * 0.15) % 2) - 2
+	[plane, plane2].forEach(p => {
+		p.position.z += planeSpeed
+		if (p.position.z >= 2) {
+			p.position.z -= 2 * planeLength
+		}
+	})
+	plane.material.uniforms.pos.value = plane.position.z
+	plane2.material.uniforms.pos.value = plane2.position.z
 
 
 	sunComposer.render();
