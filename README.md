@@ -4,4 +4,4 @@ An experiment with ThreeJS and GLSL inspired by [Maxime Heckel](https://blog.max
 
 Built with Vite, vanilla JS and  ThreeJS.
 
-[DEMO](https://darkpouetman.github.io/Vaporwave-sunset/)
+![Vaporwave sunset](https://github.com/darkpouetman/Vaporwave-sunset/blob/main/Vaporwave-sunset.gif)
